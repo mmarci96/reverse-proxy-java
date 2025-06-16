@@ -16,6 +16,7 @@ import java.net.URISyntaxException;
 import java.util.UUID;
 
 @RestController
+@RequestMapping("/api")
 public class ProxyController {
     @Autowired ProxyService service;
 
