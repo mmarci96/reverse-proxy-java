@@ -1,5 +1,8 @@
 package com.codecool.proxy.service;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.ThreadContext;
@@ -19,13 +22,9 @@ import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Enumeration;
-
 import java.util.List;
 import java.util.Random;
 
@@ -43,18 +42,24 @@ public class ProxyService {
         return servers.get(random.nextInt(servers.size()));
     }
 
+    private static final Logger logger = LogManager.getLogger(ProxyService.class);
 
-    private final static Logger logger = LogManager.getLogger(ProxyService.class);
-
-    @Retryable(exclude = {
-            HttpStatusCodeException.class}, include = Exception.class, backoff = @Backoff(delay = 5000, multiplier = 4.0), maxAttempts = 4)
-    public ResponseEntity<String> processProxyRequest(String body,
-                                                      HttpMethod method, HttpServletRequest request, HttpServletResponse response, String traceId) throws URISyntaxException {
+    @Retryable(
+            exclude = {HttpStatusCodeException.class},
+            include = Exception.class,
+            backoff = @Backoff(delay = 5000, multiplier = 4.0),
+            maxAttempts = 4)
+    public ResponseEntity<String> processProxyRequest(
+            String body,
+            HttpMethod method,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            String traceId)
+            throws URISyntaxException {
         String domain = getRandomBackend();
 
-
         ThreadContext.put("traceId", traceId);
-        String requestUrl = request.getRequestURI();        //log if required in this line
+        String requestUrl = request.getRequestURI(); // log if required in this line
         requestUrl = requestUrl.replaceFirst("^" + request.getContextPath(), "");
 
         String[] hostParts = domain.split(":");
@@ -63,11 +68,12 @@ public class ProxyService {
 
         URI uri = new URI("http", null, host, port, null, null, null);
 
-        uri = UriComponentsBuilder.fromUri(uri)
-                .path(requestUrl)
-                .query(request.getQueryString())
-                .build(true)
-                .toUri();
+        uri =
+                UriComponentsBuilder.fromUri(uri)
+                        .path(requestUrl)
+                        .query(request.getQueryString())
+                        .build(true)
+                        .toUri();
 
         logger.info("Forwarding request to: " + uri);
 
@@ -80,28 +86,42 @@ public class ProxyService {
         headers.set("TRACE", traceId);
         headers.remove(HttpHeaders.ACCEPT_ENCODING);
         HttpEntity<String> httpEntity = new HttpEntity<>(body, headers);
-        ClientHttpRequestFactory factory = new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory());
+        ClientHttpRequestFactory factory =
+                new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory());
         RestTemplate restTemplate = new RestTemplate(factory);
         try {
-            ResponseEntity<String> serverResponse = restTemplate.exchange(uri, method, httpEntity, String.class);
+            ResponseEntity<String> serverResponse =
+                    restTemplate.exchange(uri, method, httpEntity, String.class);
             HttpHeaders responseHeaders = new HttpHeaders();
-            responseHeaders.put(HttpHeaders.CONTENT_TYPE, serverResponse.getHeaders().get(HttpHeaders.CONTENT_TYPE));
+            responseHeaders.put(
+                    HttpHeaders.CONTENT_TYPE,
+                    serverResponse.getHeaders().get(HttpHeaders.CONTENT_TYPE));
             logger.info(serverResponse);
             return serverResponse;
         } catch (HttpStatusCodeException e) {
             logger.error(e.getMessage());
-            return ResponseEntity.status(e.getRawStatusCode())
+            return ResponseEntity.status(e.getStatusCode().value())
                     .headers(e.getResponseHeaders())
                     .body(e.getResponseBodyAsString());
         }
-
     }
 
     @Recover
-    public ResponseEntity<String> recoverFromRestClientErrors(Exception e, String body,
-                                                              HttpMethod method, HttpServletRequest request, HttpServletResponse response, String traceId) {
-        logger.error("retry method for the following url " + request.getRequestURI() + " has failed" + e.getMessage());
+    public ResponseEntity<String> recoverFromRestClientErrors(
+            Exception e,
+            String body,
+            HttpMethod method,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            String traceId) {
+        logger.error(
+                "retry method for the following url "
+                        + request.getRequestURI()
+                        + " has failed"
+                        + e.getMessage());
         logger.error(e.getStackTrace());
-        throw new RuntimeException("There was an error trying to process you request. Please try again later");
+        throw new RuntimeException(
+                "There was an error trying to process you request. Please try again later");
     }
 }
+
