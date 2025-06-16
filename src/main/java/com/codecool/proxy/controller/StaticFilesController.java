@@ -4,9 +4,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 @Controller
+@RequestMapping(value = {"/", "/{path:[^\\.]*}", "/**/{path:[^\\.]*}"})
 public class StaticFilesController {
 
-    @RequestMapping("/")
     public String serveHomePage() {
         return "forward:/index.html";
     }
